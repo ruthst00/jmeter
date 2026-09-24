@@ -770,4 +770,126 @@ public class BasicCurlParserTest {
         assertTrue(BasicCurlParser.isValidCookie("a=b;c=d"), "The string should be cookies");
         assertFalse(BasicCurlParser.isValidCookie("test.txt"), "A filename is not a valid cookie");
     }
+
+    /**
+     * Escaped single-quote inside a single-quoted --data value must not cause
+     * "unbalanced quotes" and must be included literally in the post data.
+     * Reproduces https://github.com/apache/jmeter/issues/6374
+     */
+    @Test
+    public void testEscapedSingleQuoteInData() {
+        // Shell representation: --data 'tes\'t'
+        // In Java string: the outer single-quotes are literal chars, the \' is a backslash + single-quote
+        String curl = " curl -X POST \"localhost.com\" --data 'tes\\'t'";
+        BasicCurlParser basicCurlParser = new BasicCurlParser();
+        BasicCurlParser.Request request = basicCurlParser.parse(curl);
+        assertEquals("tes't", request.getPostData(),
+                "Escaped single-quote inside single-quoted data should be preserved");
+    }
+
+    /**
+     * Escaped double-quote inside a double-quoted --data value must not cause
+     * "unbalanced quotes" and must be included literally in the post data.
+     * Reproduces https://github.com/apache/jmeter/issues/6374
+     */
+    @Test
+    public void testEscapedDoubleQuoteInData() {
+        // Shell representation: --data "tes\"t"
+        String curl = " curl -X POST \"localhost.com\" --data \"tes\\\"t\"";
+        BasicCurlParser basicCurlParser = new BasicCurlParser();
+        BasicCurlParser.Request request = basicCurlParser.parse(curl);
+        assertEquals("tes\"t", request.getPostData(),
+                "Escaped double-quote inside double-quoted data should be preserved");
+    }
+
+    // -----------------------------------------------------------------------
+    // Direct unit tests for translateCommandline (tokenizer-level coverage)
+    // -----------------------------------------------------------------------
+
+    /** Plain unquoted tokens are split on spaces. */
+    @Test
+    public void testTranslateCommandlineSimpleTokens() {
+        String[] result = BasicCurlParser.translateCommandline("curl -X POST http://example.com");
+        assertEquals(4, result.length);
+        assertEquals("curl", result[0]);
+        assertEquals("-X", result[1]);
+        assertEquals("POST", result[2]);
+        assertEquals("http://example.com", result[3]);
+    }
+
+    /** Single-quoted token: quotes are stripped, content preserved verbatim. */
+    @Test
+    public void testTranslateCommandlineSingleQuotedToken() {
+        String[] result = BasicCurlParser.translateCommandline("curl 'hello world'");
+        assertEquals(2, result.length);
+        assertEquals("curl", result[0]);
+        assertEquals("hello world", result[1]);
+    }
+
+    /** Double-quoted token: quotes are stripped, content preserved verbatim. */
+    @Test
+    public void testTranslateCommandlineDoubleQuotedToken() {
+        String[] result = BasicCurlParser.translateCommandline("curl \"hello world\"");
+        assertEquals(2, result.length);
+        assertEquals("curl", result[0]);
+        assertEquals("hello world", result[1]);
+    }
+
+    /**
+     * Backslash-escaped single-quote inside a single-quoted token must be
+     * treated as a literal single-quote (fix for issue #6374).
+     */
+    @Test
+    public void testTranslateCommandlineEscapedSingleQuoteInsideSingleQuotes() {
+        // Input string (as seen by the JVM): 'tes\'t'
+        // i.e. single-quote, t, e, s, backslash, single-quote, t, single-quote
+        String[] result = BasicCurlParser.translateCommandline("'tes\\'t'");
+        assertEquals(1, result.length);
+        assertEquals("tes't", result[0]);
+    }
+
+    /**
+     * Backslash-escaped double-quote inside a double-quoted token must be
+     * treated as a literal double-quote (fix for issue #6374).
+     */
+    @Test
+    public void testTranslateCommandlineEscapedDoubleQuoteInsideDoubleQuotes() {
+        // Input string (as seen by the JVM): "tes\"t"
+        String[] result = BasicCurlParser.translateCommandline("\"tes\\\"t\"");
+        assertEquals(1, result.length);
+        assertEquals("tes\"t", result[0]);
+    }
+
+    /** Multiple escaped quotes in a single token are all preserved. */
+    @Test
+    public void testTranslateCommandlineMultipleEscapedQuotes() {
+        // 'it\'s a test\'s value'  →  it's a test's value
+        String[] result = BasicCurlParser.translateCommandline("'it\\'s a test\\'s value'");
+        assertEquals(1, result.length);
+        assertEquals("it's a test's value", result[0]);
+    }
+
+    /** Backslash + newline (line continuation) outside quotes is consumed silently. */
+    @Test
+    public void testTranslateCommandlineBackslashLineContinuation() {
+        String[] result = BasicCurlParser.translateCommandline("curl \\\n-d 'hey'");
+        assertEquals(3, result.length);
+        assertEquals("curl", result[0]);
+        assertEquals("-d", result[1]);
+        assertEquals("hey", result[2]);
+    }
+
+    /** Empty input returns an empty array. */
+    @Test
+    public void testTranslateCommandlineEmptyInput() {
+        assertEquals(0, BasicCurlParser.translateCommandline("").length);
+    }
+
+    /** Genuinely unbalanced quotes still throw IllegalArgumentException. */
+    @Test
+    public void testTranslateCommandlineUnbalancedQuotesStillThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> BasicCurlParser.translateCommandline("curl \"unclosed"),
+                "Genuinely unbalanced quotes must still throw");
+    }
 }

@@ -829,50 +829,79 @@ public class BasicCurlParser {
             //no command? no string
             return new String[0];
         }
-        // parse with a simple finite state machine
+        // parse with a character-level finite state machine so that
+        // backslash-escaped quotes inside a quoted token are handled correctly
+        // (e.g. 'tes\'t' or "tes\"t").
 
         final int normal = 0;
         final int inQuote = 1;
         final int inDoubleQuote = 2;
         int state = normal;
-        final StringTokenizer tok = new StringTokenizer(toProcess, "\"\' ", true);
         final ArrayList<String> result = new ArrayList<>();
         final StringBuilder current = new StringBuilder();
         boolean lastTokenHasBeenQuoted = false;
 
-        while (tok.hasMoreTokens()) {
-            String nextTok = tok.nextToken();
+        int i = 0;
+        final int len = toProcess.length();
+        while (i < len) {
+            char c = toProcess.charAt(i);
             switch (state) {
                 case inQuote -> {
-                    if ("'".equals(nextTok)) {
+                    if (c == '\\' && i + 1 < len && toProcess.charAt(i + 1) == '\'') {
+                        // escaped single-quote inside single-quoted string
+                        current.append('\'');
+                        i += 2;
+                    } else if (c == '\'') {
                         lastTokenHasBeenQuoted = true;
                         state = normal;
+                        i++;
                     } else {
-                        current.append(nextTok);
+                        current.append(c);
+                        i++;
                     }
                 }
                 case inDoubleQuote -> {
-                    if ("\"".equals(nextTok)) {
+                    if (c == '\\' && i + 1 < len && toProcess.charAt(i + 1) == '"') {
+                        // escaped double-quote inside double-quoted string
+                        current.append('"');
+                        i += 2;
+                    } else if (c == '"') {
                         lastTokenHasBeenQuoted = true;
                         state = normal;
+                        i++;
                     } else {
-                        current.append(nextTok);
+                        current.append(c);
+                        i++;
                     }
                 }
                 default -> {
-                    if ("'".equals(nextTok)) {
+                    if (c == '\'') {
                         state = inQuote;
-                    } else if ("\"".equals(nextTok)) {
+                        i++;
+                    } else if (c == '"') {
                         state = inDoubleQuote;
-                    } else if (" ".equals(nextTok)) {
+                        i++;
+                    } else if (c == ' ') {
                         if (lastTokenHasBeenQuoted || !current.isEmpty()) {
                             result.add(current.toString());
                             current.setLength(0);
                         }
+                        lastTokenHasBeenQuoted = false;
+                        i++;
+                    } else if (c == '\\' && i + 1 < len
+                            && (toProcess.charAt(i + 1) == '\r' || toProcess.charAt(i + 1) == '\n')) {
+                        // backslash line-continuation: skip the backslash and the newline
+                        i += 2;
+                        // also skip a following \n if we consumed \r
+                        if (i < len && toProcess.charAt(i) == '\n') {
+                            i++;
+                        }
+                        lastTokenHasBeenQuoted = false;
                     } else {
-                        current.append(nextTok.replaceAll("^\\\\[\\r\\n]", ""));
+                        current.append(c);
+                        lastTokenHasBeenQuoted = false;
+                        i++;
                     }
-                    lastTokenHasBeenQuoted = false;
                 }
             }
         }
