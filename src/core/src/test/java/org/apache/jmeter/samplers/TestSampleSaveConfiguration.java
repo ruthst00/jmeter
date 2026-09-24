@@ -155,6 +155,25 @@ public class TestSampleSaveConfiguration extends JMeterTestCase {
         assertTrue(a.strictDateFormatter().equals(b.strictDateFormatter()), "Objects should be equal");
     }
 
+    /**
+     * Regression test for https://github.com/apache/jmeter/issues/6395
+     * <p>
+     * {@code jmeter.save.saveservice.url} must default to {@code false}.
+     * Prior to the fix the fallback value in the static initializer was {@code TRUE},
+     * so the URL was always written to result files even when the property was absent.
+     */
+    @Test
+    public void testUrlNotSavedByDefault() {
+        // The default SampleSaveConfiguration (no property override) must not save the URL.
+        SampleSaveConfiguration config = new SampleSaveConfiguration();
+        assertFalse(config.saveUrl(),
+                "saveUrl() should be false by default (jmeter.save.saveservice.url defaults to false)");
+
+        // staticConfig() must agree with the instance default.
+        assertFalse(SampleSaveConfiguration.staticConfig().saveUrl(),
+                "staticConfig().saveUrl() should be false by default");
+    }
+
     @Test
     // Checks that all the saveXX() and setXXX(boolean) methods are in the list
     public void testSaveConfigNames() throws Exception {

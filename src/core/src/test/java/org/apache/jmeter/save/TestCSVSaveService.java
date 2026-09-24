@@ -153,7 +153,7 @@ public class TestCSVSaveService extends JMeterTestCase {
     // if this test fails, check whether the default was intentionally changed or not
     public void testHeader() {
         final String HDR = "timeStamp,elapsed,label,responseCode,responseMessage,threadName,dataType,success,"
-                + "failureMessage,bytes,sentBytes,grpThreads,allThreads,URL,Latency,IdleTime,Connect";
+                + "failureMessage,bytes,sentBytes,grpThreads,allThreads,Latency,IdleTime,Connect";
         assertEquals(HDR, CSVSaveService.printableFieldNamesToString(), "Header text has changed");
     }
 
@@ -161,7 +161,7 @@ public class TestCSVSaveService extends JMeterTestCase {
     // sample format should not change unexpectedly
     // if this test fails, check whether the default was intentionally changed or not
     public void testSample() throws MalformedURLException {
-        final String RESULT = "1,2,3,4,5,6,7,true,,8,9,10,11,https://jmeter.apache.org,12,13,14";
+        final String RESULT = "1,2,3,4,5,6,7,true,,8,9,10,11,12,13,14";
         SampleResult result = new SampleResult();
         result.setSaveConfig(new SampleSaveConfiguration());
         result.setStampAndTime(1, 2);
