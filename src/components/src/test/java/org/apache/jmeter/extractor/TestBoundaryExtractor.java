@@ -18,7 +18,9 @@
 package org.apache.jmeter.extractor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.threads.JMeterContext;
@@ -107,5 +109,66 @@ public class TestBoundaryExtractor {
         assertNull(vars.get("varname"), "Non indexed variable name should be null");
         assertEquals("on", vars.get("varname_1"), "First match is incorrect");
         assertEquals("1", vars.get("varname_matchNr"), "MatchNumber is incorrect");
+    }
+
+    /**
+     * matchNumber=0 means random: when there is exactly one match the result
+     * must equal that match (no ambiguity about which one is chosen).
+     */
+    @Test
+    public void testMatchNumberZeroRandomSingleMatch() {
+        vars.put("content", "left-VALUE-right");
+        extractor.setLeftBoundary("left-");
+        extractor.setRightBoundary("-right");
+        extractor.setMatchNumber(0);
+        extractor.setRefName("varname");
+        extractor.setScopeVariable("content");
+        extractor.setThreadContext(jmctx);
+        extractor.process();
+        assertEquals("VALUE", vars.get("varname"),
+                "matchNumber=0 (random) with a single match should return that match");
+        assertNull(vars.get("varname_matchNr"),
+                "matchNr variable should not be set for matchNumber=0");
+    }
+
+    /**
+     * matchNumber=0 means random: when there are multiple matches the result
+     * must be one of the available matches.
+     */
+    @Test
+    public void testMatchNumberZeroRandomMultipleMatches() {
+        vars.put("content", "left-A-right left-B-right left-C-right");
+        extractor.setLeftBoundary("left-");
+        extractor.setRightBoundary("-right");
+        extractor.setMatchNumber(0);
+        extractor.setRefName("varname");
+        extractor.setScopeVariable("content");
+        extractor.setThreadContext(jmctx);
+        extractor.process();
+        String found = vars.get("varname");
+        assertNotNull(found, "matchNumber=0 (random) should return a non-null result when matches exist");
+        assertTrue("A".equals(found) || "B".equals(found) || "C".equals(found),
+                "matchNumber=0 (random) result '" + found + "' should be one of the available matches");
+        assertNull(vars.get("varname_matchNr"),
+                "matchNr variable should not be set for matchNumber=0");
+    }
+
+    /**
+     * An empty Match No. field is stored as "" which resolves to 0 via
+     * getIntValue(), so it must behave identically to matchNumber=0 (random).
+     */
+    @Test
+    public void testEmptyMatchNumberFieldBehavesLikeZero() {
+        vars.put("content", "left-ONLY-right");
+        extractor.setLeftBoundary("left-");
+        extractor.setRightBoundary("-right");
+        // Simulate the GUI leaving the field blank: store an empty string property
+        extractor.setMatchNumber("");
+        extractor.setRefName("varname");
+        extractor.setScopeVariable("content");
+        extractor.setThreadContext(jmctx);
+        extractor.process();
+        assertEquals("ONLY", vars.get("varname"),
+                "Empty Match No. field (defaults to 0/random) should return the single available match");
     }
 }

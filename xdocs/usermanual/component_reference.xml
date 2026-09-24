@@ -5744,6 +5744,7 @@ generate the template string, and store the result into the given variable name.
                 <li>Use a value of zero to indicate JMeter should choose a match at random.</li>
                 <li>A positive number N means to select the n<sup>th</sup> match.</li>
                 <li> Negative numbers are used in conjunction with the <complink name="ForEach Controller"/> - see below.</li>
+                <li>If the field is left <b>empty</b>, it defaults to <code>0</code> (random).</li>
             </ul>
         </property>
         <property name="Default Value" required="No, but recommended">
@@ -6312,6 +6313,7 @@ generate the template string, and store the result into the given variable name.
                 <li>Use a value of zero to indicate JMeter should choose a match at random.</li>
                 <li>A positive number N means to select the n<sup>th</sup> match.</li>
                 <li> Negative numbers are used in conjunction with the <complink name="ForEach Controller"/> - see below.</li>
+                <li>If the field is left <b>empty</b>, it defaults to <code>0</code> (random).</li>
             </ul>
         </property>
         <property name="Default Value" required="No, but recommended">

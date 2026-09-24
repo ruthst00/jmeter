@@ -125,6 +125,21 @@ public class TestRegexExtractor {
         assertEquals("value", vars.get("regVal"));
     }
 
+    /**
+     * An empty Match No. field must behave identically to matchNumber=0 (random).
+     * When there is exactly one match the result must equal that match.
+     */
+    @Test
+    public void testEmptyMatchNumberFieldBehavesLikeZero() {
+        extractor.setRegex("<(value) field=\"");
+        extractor.setTemplate("$1$");
+        // Simulate the GUI leaving the field blank
+        extractor.setMatchNumber("");
+        extractor.process();
+        assertEquals("value", vars.get("regVal"),
+                "Empty Match No. field (defaults to 0/random) should return the single available match");
+    }
+
     @Test
     public void testVariableExtraction() {
         extractor.setRegex("<value field=\"(pinposition\\d+)\">(\\d+)</value>");
