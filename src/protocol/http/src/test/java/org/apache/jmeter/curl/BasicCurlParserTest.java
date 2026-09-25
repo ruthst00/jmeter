@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.of;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,6 +32,7 @@ import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import org.apache.jmeter.protocol.http.control.Cookie;
 import org.apache.jmeter.protocol.http.curl.ArgumentHolder;
@@ -40,6 +42,9 @@ import org.apache.jmeter.protocol.http.curl.StringArgumentHolder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class BasicCurlParserTest {
 
@@ -802,55 +807,48 @@ public class BasicCurlParserTest {
                 "Escaped double-quote inside double-quoted data should be preserved");
     }
 
-    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> translateCommandlineCases() {
-        return java.util.stream.Stream.of(
+    static Stream<Arguments> translateCommandlineCases() {
+        return Stream.of(
             // Plain unquoted tokens split on spaces
             // bash: printf "%s\n" curl -X POST http://example.com
             //   → curl / -X / POST / http://example.com
-            org.junit.jupiter.params.provider.Arguments.of(
-                "plain unquoted tokens",
+            of("plain unquoted tokens",
                 "curl -X POST http://example.com",
                 new String[]{"curl", "-X", "POST", "http://example.com"}),
 
             // Single-quoted token: quotes stripped, content verbatim
             // bash: printf "%s\n" curl 'hello world'  → curl / hello world
-            org.junit.jupiter.params.provider.Arguments.of(
-                "single-quoted token with space",
+            of("single-quoted token with space",
                 "curl 'hello world'",
                 new String[]{"curl", "hello world"}),
 
             // Double-quoted token: quotes stripped, content verbatim
             // bash: printf "%s\n" curl "hello world"  → curl / hello world
-            org.junit.jupiter.params.provider.Arguments.of(
-                "double-quoted token with space",
+            of("double-quoted token with space",
                 "curl \"hello world\"",
                 new String[]{"curl", "hello world"}),
 
             // POSIX idiom for single quote inside single-quoted string: 'tes'\''t'
             // bash: printf "%s\n" 'tes'\''t'  → tes't
-            org.junit.jupiter.params.provider.Arguments.of(
-                "single quote via POSIX idiom 'tes'\\''t'",
+            of("single quote via POSIX idiom 'tes'\\''t'",
                 "'tes'\\''t'",
                 new String[]{"tes't"}),
 
             // Escaped double-quote inside double-quoted string
             // bash: printf "%s\n" "tes\"t"  → tes"t
-            org.junit.jupiter.params.provider.Arguments.of(
-                "escaped double-quote inside double quotes",
+            of("escaped double-quote inside double quotes",
                 "\"tes\\\"t\"",
                 new String[]{"tes\"t"}),
 
             // Multiple POSIX single-quote idioms in one token
             // bash: printf "%s\n" 'it'\''s a test'\''s value'  → it's a test's value
-            org.junit.jupiter.params.provider.Arguments.of(
-                "multiple single quotes via POSIX idiom",
+            of("multiple single quotes via POSIX idiom",
                 "'it'\\''s a test'\\''s value'",
                 new String[]{"it's a test's value"}),
 
             // Backslash + LF line continuation outside quotes
             // bash: printf "%s\n" curl \<LF>-d 'hey'  → curl / -d / hey
-            org.junit.jupiter.params.provider.Arguments.of(
-                "backslash-LF line continuation",
+            of("backslash-LF line continuation",
                 "curl \\\n-d 'hey'",
                 new String[]{"curl", "-d", "hey"}),
 
@@ -858,37 +856,33 @@ public class BasicCurlParserTest {
             // \<CR> escapes the CR (appending it to the current token); the following
             // <LF> is not a token separator in this tokenizer, so it is also appended.
             // Result: the second token is "\r\n-d" (CR + LF + "-d" run together).
-            org.junit.jupiter.params.provider.Arguments.of(
-                "backslash-CRLF: only LF continuation is supported; CR and LF are appended",
+            of("backslash-CRLF: only LF continuation is supported; CR and LF are appended",
                 "curl \\\r\n-d 'hey'",
                 new String[]{"curl", "\r\n-d", "hey"}),
 
             // Backslash inside single quotes is literal; 'C:\dir\' is a complete
             // single-quoted string containing C:\dir\
             // bash: set -- curl -d 'C:\dir\'; echo $#  → 3 tokens: curl / -d / C:\dir\
-            org.junit.jupiter.params.provider.Arguments.of(
-                "backslash before closing single quote is literal inside single quotes",
+            of("backslash before closing single quote is literal inside single quotes",
                 "curl -d 'C:\\dir\\'",
                 new String[]{"curl", "-d", "C:\\dir\\"}),
 
             // Inside double quotes, \\ → single backslash; closing " is unescaped
             // bash: printf "%s\n" curl -d "C:\\dir\\" http://x  → curl / -d / C:\dir\ / http://x
-            org.junit.jupiter.params.provider.Arguments.of(
-                "escaped backslashes inside double quotes",
+            of("escaped backslashes inside double quotes",
                 "curl -d \"C:\\\\dir\\\\\" http://x",
                 new String[]{"curl", "-d", "C:\\dir\\", "http://x"}),
 
             // Inside double quotes, \\ → single backslash
             // bash: printf "%s\n" "a\\b"  → a\b
-            org.junit.jupiter.params.provider.Arguments.of(
-                "double-quoted escaped backslash yields single backslash",
+            of("double-quoted escaped backslash yields single backslash",
                 "\"a\\\\b\"",
                 new String[]{"a\\b"})
         );
     }
 
-    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
-    @org.junit.jupiter.params.provider.MethodSource("translateCommandlineCases")
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("translateCommandlineCases")
     public void testTranslateCommandline(String name, String input, String[] expected) {
         String[] result = BasicCurlParser.translateCommandline(input);
         assertEquals(expected.length, result.length, "token count for: " + input);
