@@ -818,7 +818,25 @@ public class BasicCurlParser {
     }
 
     /**
-     * Crack a command line.
+     * Break a command line into an array of arguments, using shell-like quoting rules:
+     * <ul>
+     *   <li>Tokens are delimited by unquoted spaces.</li>
+     *   <li>Single-quoted strings ({@code '...'}) preserve every character literally,
+     *       including backslashes. Nothing can be escaped inside single quotes; the
+     *       first {@code '} ends the quoted region.</li>
+     *   <li>Double-quoted strings ({@code "..."}) follow POSIX rules: a backslash
+     *       is an escape character only before {@code "}, {@code \}, {@code $},
+     *       <code>&#96;</code>, and a newline; before any other character the
+     *       backslash is kept as a literal {@code \}.</li>
+     *   <li>Outside of quotes, a backslash escapes the immediately following
+     *       character: the backslash is dropped and the next character is appended
+     *       literally. The one exception is a backslash followed by {@code <LF>},
+     *       which is treated as a line-continuation and discards both characters.
+     *       A backslash followed by {@code <CR>} escapes the carriage-return
+     *       character itself (appending it to the current token).</li>
+     *   <li>ANSI-C quoting ({@code $'...'}) is not supported; an
+     *       {@link IllegalArgumentException} is thrown if it is encountered.</li>
+     * </ul>
      *
      * @param toProcess the command line to process.
      * @return the command line broken into strings.
@@ -829,9 +847,6 @@ public class BasicCurlParser {
             //no command? no string
             return new String[0];
         }
-        // parse with a character-level finite state machine so that
-        // backslash-escaped quotes inside a quoted token are handled correctly
-        // (e.g. 'tes\'t' or "tes\"t").
 
         final int normal = 0;
         final int inQuote = 1;
@@ -847,11 +862,7 @@ public class BasicCurlParser {
             char c = toProcess.charAt(i);
             switch (state) {
                 case inQuote -> {
-                    if (c == '\\' && i + 1 < len && toProcess.charAt(i + 1) == '\'') {
-                        // escaped single-quote inside single-quoted string
-                        current.append('\'');
-                        i += 2;
-                    } else if (c == '\'') {
+                    if (c == '\'') {
                         lastTokenHasBeenQuoted = true;
                         state = normal;
                         i++;
@@ -861,10 +872,22 @@ public class BasicCurlParser {
                     }
                 }
                 case inDoubleQuote -> {
-                    if (c == '\\' && i + 1 < len && toProcess.charAt(i + 1) == '"') {
-                        // escaped double-quote inside double-quoted string
-                        current.append('"');
-                        i += 2;
+                    if (c == '\\' && i + 1 < len) {
+                        char next = toProcess.charAt(i + 1);
+                        if (next == '"' || next == '\\' || next == '$' || next == '`' || next == '\n') {
+                            current.append(next);
+                            i += 2;
+                        } else if (next == '\r') {
+                            // backslash-newline line continuation inside double quotes
+                            i += 2;
+                            if (i < len && toProcess.charAt(i) == '\n') {
+                                i++;
+                            }
+                        } else {
+                            // backslash is literal before any other character
+                            current.append(c);
+                            i++;
+                        }
                     } else if (c == '"') {
                         lastTokenHasBeenQuoted = true;
                         state = normal;
@@ -875,7 +898,10 @@ public class BasicCurlParser {
                     }
                 }
                 default -> {
-                    if (c == '\'') {
+                    if (c == '$' && i + 1 < len && toProcess.charAt(i + 1) == '\'') {
+                        throw new IllegalArgumentException(
+                                "ANSI-C quoting ($'...') is not supported in: " + toProcess);
+                    } else if (c == '\'') {
                         state = inQuote;
                         i++;
                     } else if (c == '"') {
@@ -888,13 +914,15 @@ public class BasicCurlParser {
                         }
                         lastTokenHasBeenQuoted = false;
                         i++;
-                    } else if (c == '\\' && i + 1 < len
-                            && (toProcess.charAt(i + 1) == '\r' || toProcess.charAt(i + 1) == '\n')) {
-                        // backslash line-continuation: skip the backslash and the newline
-                        i += 2;
-                        // also skip a following \n if we consumed \r
-                        if (i < len && toProcess.charAt(i) == '\n') {
-                            i++;
+                    } else if (c == '\\' && i + 1 < len) {
+                        char next = toProcess.charAt(i + 1);
+                        if (next == '\n') {
+                            // backslash-LF line continuation: discard both
+                            i += 2;
+                        } else {
+                            // backslash escapes any other character literally (including \r)
+                            current.append(next);
+                            i += 2;
                         }
                         lastTokenHasBeenQuoted = false;
                     } else {
