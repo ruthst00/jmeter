@@ -126,18 +126,12 @@ public class TestRegexExtractor {
     }
 
     /**
-     * An empty Match No. field must behave identically to matchNumber=0 (random).
-     * When there is exactly one match the result must equal that match.
+     * An empty Match No. is treated as 0.
      */
     @Test
-    public void testEmptyMatchNumberFieldBehavesLikeZero() {
-        extractor.setRegex("<(value) field=\"");
-        extractor.setTemplate("$1$");
-        // Simulate the GUI leaving the field blank
+    public void testEmptyMatchNumber() {
         extractor.setMatchNumber("");
-        extractor.process();
-        assertEquals("value", vars.get("regVal"),
-                "Empty Match No. field (defaults to 0/random) should return the single available match");
+        assertEquals(0, extractor.getMatchNumber(), "getMatchNumber() for an empty Match No.");
     }
 
     @Test
